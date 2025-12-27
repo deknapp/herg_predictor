@@ -1,0 +1,104 @@
+# Default configuration for hERG prediction experiments
+
+data:
+  # ChEMBL target ID for hERG
+  target_chembl_id: "CHEMBL240"
+  # IC50 threshold in nM for binary classification (10 μM = 10000 nM)
+  activity_threshold_nm: 10000
+  # Minimum number of datapoints required
+  min_samples: 1000
+  # Output paths
+  raw_path: "data/raw/herg_chembl.csv"
+  processed_path: "data/processed/herg_clean.parquet"
+
+preprocessing:
+  # Remove salts and standardize structures
+  standardize: true
+  # Remove duplicates (keep median activity for same SMILES)
+  deduplicate: true
+  # Activity types to include
+  activity_types: ["IC50", "Ki"]
+  # Only keep exact measurements (not ranges)
+  exact_only: true
+
+splitting:
+  # Strategy: random, scaffold, or temporal
+  strategy: "scaffold"
+  # Split ratios
+  train_ratio: 0.8
+  val_ratio: 0.1
+  test_ratio: 0.1
+  # Random seed
+  seed: 42
+
+features:
+  # Which featurizers to use
+  fingerprints:
+    morgan:
+      radius: 2
+      n_bits: 2048
+    maccs:
+      enabled: true
+  descriptors:
+    rdkit_2d:
+      enabled: true
+      normalize: true
+  graphs:
+    atom_features: ["atomic_num", "degree", "formal_charge", "hybridization", "aromatic"]
+    bond_features: ["bond_type", "is_conjugated", "is_in_ring"]
+
+model:
+  # Model type: random_forest, xgboost, feedforward, gnn
+  type: "feedforward"
+  
+  # Random forest params
+  random_forest:
+    n_estimators: 500
+    max_depth: null
+    min_samples_leaf: 2
+    class_weight: "balanced"
+  
+  # XGBoost params
+  xgboost:
+    n_estimators: 500
+    max_depth: 6
+    learning_rate: 0.1
+    scale_pos_weight: auto  # Will be computed from class imbalance
+  
+  # Feedforward neural network params
+  feedforward:
+    hidden_dims: [512, 256, 128]
+    dropout: 0.3
+    batch_norm: true
+    activation: "relu"
+  
+  # GNN params (MPNN-style)
+  gnn:
+    hidden_dim: 128
+    num_layers: 3
+    dropout: 0.2
+    aggregation: "mean"
+    readout: "mean"
+
+training:
+  batch_size: 64
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  epochs: 100
+  early_stopping_patience: 10
+  # Class weighting for imbalanced data
+  use_class_weights: true
+  # Device
+  device: "auto"  # auto, cpu, or cuda
+
+evaluation:
+  # Metrics to compute
+  metrics: ["auroc", "auprc", "balanced_accuracy", "sensitivity", "specificity", "f1"]
+  # Bootstrap confidence intervals
+  bootstrap_iterations: 1000
+  confidence_level: 0.95
+
+output:
+  checkpoint_dir: "checkpoints"
+  results_dir: "results"
+  log_dir: "logs"
