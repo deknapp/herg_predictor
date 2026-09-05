@@ -4,7 +4,11 @@ import logging
 from pathlib import Path
 
 import pandas as pd
-from chembl_webresource_client.new_client import new_client
+
+# chembl_webresource_client builds its client by fetching the API schema at
+# IMPORT time, so importing it at module scope makes this whole package
+# unimportable whenever ChEMBL is unreachable -- including the parts that need
+# no network at all. It is imported inside download_herg_data() instead.
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -31,7 +35,16 @@ def download_herg_data(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     logger.info(f"Fetching hERG data from ChEMBL (target: {target_chembl_id})")
-    
+
+    try:
+        from chembl_webresource_client.new_client import new_client
+    except Exception as exc:  # noqa: BLE001 - the client raises bare Exception
+        raise ConnectionError(
+            "Could not reach the ChEMBL API. The client fetches its schema on "
+            "import, so this fails before any query is sent. Check "
+            "https://www.ebi.ac.uk/chembl/api/data/status.json and retry."
+        ) from exc
+
     activity = new_client.activity
     
     # Query for hERG activities
