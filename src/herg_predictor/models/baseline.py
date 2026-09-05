@@ -2,7 +2,11 @@
 
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
+
+# xgboost is imported lazily inside XGBoostModel. Its wheel links against a
+# system OpenMP runtime (libomp on macOS) that is not installed everywhere, and
+# a missing system library should not stop anyone from using the Random Forest
+# baseline or the rest of this package.
 
 
 class RandomForestModel:
@@ -57,6 +61,15 @@ class XGBoostModel:
         n_jobs: int = -1,
     ):
         self.scale_pos_weight = scale_pos_weight
+        try:
+            from xgboost import XGBClassifier
+        except (ImportError, Exception) as exc:  # noqa: B014 - xgboost raises XGBoostError
+            raise ImportError(
+                "xgboost is unavailable. On macOS this usually means the OpenMP "
+                "runtime is missing -- `brew install libomp`. The Random Forest "
+                "and HistGradientBoosting baselines need no system libraries."
+            ) from exc
+
         self.model = XGBClassifier(
             n_estimators=n_estimators,
             max_depth=max_depth,
