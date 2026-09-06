@@ -1,0 +1,133 @@
+{
+  "dataset": {
+    "n_compounds": 11059,
+    "n_blockers": 7226,
+    "n_non_blockers": 3833,
+    "blocker_fraction": 0.6534,
+    "threshold_nm": 10000.0,
+    "target": "CHEMBL240 (hERG)",
+    "features": "Morgan/ECFP4, radius 2, 2048 bits"
+  },
+  "splits": {
+    "scaffold": {
+      "n_train": 9956,
+      "n_test": 1103,
+      "models": {
+        "Logistic regression": {
+          "auroc": 0.7493323626679154,
+          "auprc": 0.8553723339210189,
+          "balanced_accuracy": 0.665961836752612,
+          "sensitivity": 0.7042640990371389,
+          "specificity": 0.6276595744680851,
+          "precision": 0.7852760736196319,
+          "f1": 0.7425670775924583,
+          "mcc": 0.3200274915354897,
+          "tp": 512,
+          "tn": 236,
+          "fp": 140,
+          "fn": 215,
+          "threshold": 0.5,
+          "n_samples": 1103,
+          "n_positive": 727,
+          "n_negative": 376
+        },
+        "Random forest": {
+          "auroc": 0.8006691006467851,
+          "auprc": 0.8803665337266782,
+          "balanced_accuracy": 0.7244688167637332,
+          "sensitivity": 0.7840440165061898,
+          "specificity": 0.6648936170212766,
+          "precision": 0.8189655172413793,
+          "f1": 0.8011243851018974,
+          "mcc": 0.44100683087446535,
+          "tp": 570,
+          "tn": 250,
+          "fp": 126,
+          "fn": 157,
+          "threshold": 0.5,
+          "n_samples": 1103,
+          "n_positive": 727,
+          "n_negative": 376
+        },
+        "Gradient boosting": {
+          "auroc": 0.7999886593110715,
+          "auprc": 0.8834833111625502,
+          "balanced_accuracy": 0.6919082355351341,
+          "sensitivity": 0.8651994497936726,
+          "specificity": 0.5186170212765957,
+          "precision": 0.7765432098765432,
+          "f1": 0.8184775536759922,
+          "mcc": 0.4119157674609111,
+          "tp": 629,
+          "tn": 195,
+          "fp": 181,
+          "fn": 98,
+          "threshold": 0.5,
+          "n_samples": 1103,
+          "n_positive": 727,
+          "n_negative": 376
+        }
+      }
+    },
+    "random": {
+      "n_train": 9953,
+      "n_test": 1106,
+      "models": {
+        "Logistic regression": {
+          "auroc": 0.832425092719991,
+          "auprc": 0.8967583036228108,
+          "balanced_accuracy": 0.7611092452755237,
+          "sensitivity": 0.7911479944674965,
+          "specificity": 0.7310704960835509,
+          "precision": 0.8474074074074074,
+          "f1": 0.8183118741058655,
+          "mcc": 0.5094836591204555,
+          "tp": 572,
+          "tn": 280,
+          "fp": 103,
+          "fn": 151,
+          "threshold": 0.5,
+          "n_samples": 1106,
+          "n_positive": 723,
+          "n_negative": 383
+        },
+        "Random forest": {
+          "auroc": 0.8601670584921399,
+          "auprc": 0.9191228610085294,
+          "balanced_accuracy": 0.7727881722876468,
+          "sensitivity": 0.8118948824343015,
+          "specificity": 0.7336814621409922,
+          "precision": 0.8519593613933236,
+          "f1": 0.8314447592067988,
+          "mcc": 0.5356072276059919,
+          "tp": 587,
+          "tn": 281,
+          "fp": 102,
+          "fn": 136,
+          "threshold": 0.5,
+          "n_samples": 1106,
+          "n_positive": 723,
+          "n_negative": 383
+        },
+        "Gradient boosting": {
+          "auroc": 0.8580111155650412,
+          "auprc": 0.9163190380194101,
+          "balanced_accuracy": 0.7581389553968993,
+          "sensitivity": 0.8713692946058091,
+          "specificity": 0.6449086161879896,
+          "precision": 0.8224543080939948,
+          "f1": 0.8462055070517126,
+          "mcc": 0.5323511986082005,
+          "tp": 630,
+          "tn": 247,
+          "fp": 136,
+          "fn": 93,
+          "threshold": 0.5,
+          "n_samples": 1106,
+          "n_positive": 723,
+          "n_negative": 383
+        }
+      }
+    }
+  }
+}
