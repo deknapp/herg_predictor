@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hERG blocker prediction — how much of the score is real</title>
+<style>
+  :root {
+    --bg:#f8f8f6; --panel:#fff; --ink:#15181d; --muted:#6b7280; --line:#e5e3dd;
+    --warn:#b45309; --good:#15803d; --bad:#b91c1c; --accent:#1d4ed8; --r:10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#101216; --panel:#181b21; --ink:#e8eaed; --muted:#9aa1ab;
+            --line:#272b33; --warn:#fbbf24; --good:#4ade80; --bad:#f87171; --accent:#60a5fa; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif; }
+  .wrap { max-width:920px; margin:0 auto; padding:40px 20px 80px; }
+  h1 { font-size:27px; margin:0 0 6px; letter-spacing:-.02em; }
+  .sub { color:var(--muted); margin:0 0 28px; max-width:64ch; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.05em;
+       color:var(--muted); margin:34px 0 12px; }
+
+  .finding { background:var(--panel); border:1px solid var(--line);
+             border-left:3px solid var(--warn); border-radius:var(--r);
+             padding:22px 24px; margin-bottom:10px; }
+  .gap { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin:10px 0 14px; }
+  .gap .n { font-size:40px; font-weight:700; letter-spacing:-.03em; }
+  .gap .n.low { color:var(--warn); }
+  .gap .arrow { color:var(--muted); font-size:22px; }
+  .gap .lbl { font-size:12px; text-transform:uppercase; letter-spacing:.05em;
+              color:var(--muted); display:block; font-weight:600; }
+
+  table { width:100%; border-collapse:collapse; font-size:14px;
+          background:var(--panel); border:1px solid var(--line);
+          border-radius:var(--r); overflow:hidden; }
+  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+       color:var(--muted); font-weight:600; padding:10px 12px;
+       border-bottom:1px solid var(--line); }
+  td { padding:9px 12px; border-bottom:1px solid var(--line); font-variant-numeric:tabular-nums; }
+  tr:last-child td { border-bottom:0; }
+  td.name { font-variant-numeric:normal; }
+  .best { font-weight:700; }
+  .drop { color:var(--warn); font-weight:600; }
+
+  .cards { display:grid; gap:10px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
+  .card { background:var(--panel); border:1px solid var(--line);
+          border-radius:var(--r); padding:14px 16px; }
+  .card .k { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .card .v { font-size:22px; font-weight:700; margin-top:2px; letter-spacing:-.02em; }
+  .card .n { font-size:12px; color:var(--muted); margin-top:2px; }
+
+  .split { display:flex; gap:6px; margin-bottom:14px; }
+  .split button { padding:7px 14px; font-size:13px; cursor:pointer; font-family:inherit;
+    background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:7px; }
+  .split button.on { background:var(--accent); border-color:var(--accent);
+                     color:#fff; font-weight:600; }
+  .note { font-size:13px; color:var(--muted); margin-top:10px; line-height:1.65; }
+  footer { margin-top:38px; font-size:13px; color:var(--muted); line-height:1.7; }
+  code { font-size:12.5px; background:rgba(125,125,125,.13); padding:1px 5px; border-radius:4px; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Predicting hERG blockers</h1>
+  <p class="sub">A cardiotoxicity screen built from ChEMBL bioactivity data — and
+     a demonstration of how much of a machine-learning score in drug discovery
+     can be an artefact of how the data was split.</p>
+
+  <div class="finding">
+    <h2 style="margin-top:0">The finding</h2>
+    <div class="gap">
+      <span><span class="lbl">Random split</span><span class="n" id="rand">—</span></span>
+      <span class="arrow">→</span>
+      <span><span class="lbl">Scaffold split</span><span class="n low" id="scaf">—</span></span>
+      <span><span class="lbl">Difference</span><span class="n low" id="delta">—</span></span>
+    </div>
+    <p style="margin:0">The same random forest, the same compounds, the same
+    features. The only change is that a <strong>scaffold split</strong> keeps
+    chemical series whole, so a test compound never has a close analogue sitting
+    in the training set.</p>
+    <p class="note" style="margin-bottom:0">That difference is the portion of the
+    apparent performance that was recognising molecules it had effectively
+    already seen. A random split is the default in most tutorials, and on this
+    dataset it overstates the model by that margin. The number a medicinal
+    chemist should care about is the lower one.</p>
+  </div>
+
+  <h2>Dataset</h2>
+  <div class="cards" id="dataset"></div>
+
+  <h2>Models</h2>
+  <div class="split">
+    <button data-split="scaffold" class="on">Scaffold split</button>
+    <button data-split="random">Random split</button>
+  </div>
+  <div id="table"></div>
+  <p class="note" id="splitnote"></p>
+
+  <h2>Reading past the headline number</h2>
+  <div class="finding" style="border-left-color:var(--accent)">
+    <p style="margin-top:0" id="tradeoff">—</p>
+    <p class="note" style="margin-bottom:0">For a safety screen the asymmetry
+    matters more than the AUROC. Missing a blocker (a false negative) advances a
+    compound that can prolong the QT interval; a false positive only costs you a
+    molecule. A model with high sensitivity and mediocre specificity may be the
+    right one to deploy even when another ties it on AUROC.</p>
+  </div>
+
+  <footer>
+    <p><strong>Data.</strong> ChEMBL target CHEMBL240 (hERG). Activity threshold
+    10&nbsp;µM. Features are Morgan/ECFP4 fingerprints, radius 2, 2048 bits.</p>
+    <p><strong>Method.</strong> Bemis–Murcko scaffolds, stratified so class
+    balance is preserved across the split. Every number here is on the held-out
+    test set.</p>
+    <p>Source and full metrics:
+       <a href="https://github.com/deknapp/herg_predictor">github.com/deknapp/herg_predictor</a>
+       · <code>results/baseline_metrics.json</code></p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var data = null, split = "scaffold";
+  var METRICS = ["auroc", "auprc", "balanced_accuracy", "sensitivity", "specificity", "mcc"];
+  var LABELS = { auroc:"AUROC", auprc:"AUPRC", balanced_accuracy:"Balanced acc.",
+                 sensitivity:"Sensitivity", specificity:"Specificity", mcc:"MCC" };
+
+  function f(x, d) { return x == null ? "—" : Number(x).toFixed(d == null ? 3 : d); }
+
+  fetch("data/metrics.json").then(function (r) { return r.json(); }).then(function (d) {
+    data = d;
+    headline();
+    dataset();
+    render();
+  }).catch(function () {
+    document.getElementById("table").innerHTML =
+      '<p class="note">Could not load metrics.json.</p>';
+  });
+
+  function pick(splitName) {
+    // The headline uses random forest: it is the best scaffold-split model and
+    // the one whose gap between splits is the point being made.
+    return data.splits[splitName].models["Random forest"];
+  }
+
+  function headline() {
+    var r = pick("random").auroc, s = pick("scaffold").auroc;
+    document.getElementById("rand").textContent = f(r);
+    document.getElementById("scaf").textContent = f(s);
+    document.getElementById("delta").textContent = "−" + f(r - s);
+  }
+
+  function dataset() {
+    var d = data.dataset;
+    document.getElementById("dataset").innerHTML =
+      card("Compounds", d.n_compounds.toLocaleString(), "after curation") +
+      card("Blockers", d.n_blockers.toLocaleString(),
+           Math.round(d.blocker_fraction * 100) + "% of the set") +
+      card("Non-blockers", d.n_non_blockers.toLocaleString(), "the minority class") +
+      card("Threshold", (d.threshold_nm / 1000) + " µM", "blocker cutoff");
+  }
+
+  function card(k, v, n) {
+    return '<div class="card"><div class="k">' + k + '</div><div class="v">' + v +
+           '</div><div class="n">' + n + "</div></div>";
+  }
+
+  function render() {
+    var s = data.splits[split], models = s.models;
+    var head = "<tr><th>Model</th>" +
+      METRICS.map(function (m) { return "<th>" + LABELS[m] + "</th>"; }).join("") + "</tr>";
+
+    var bestAuroc = Math.max.apply(null, Object.keys(models).map(function (k) {
+      return models[k].auroc; }));
+
+    var rows = Object.keys(models).map(function (name) {
+      var m = models[name];
+      var other = data.splits[split === "scaffold" ? "random" : "scaffold"].models[name];
+      var cells = METRICS.map(function (key) {
+        var cls = (key === "auroc" && m[key] === bestAuroc) ? ' class="best"' : "";
+        return "<td" + cls + ">" + f(m[key]) + "</td>";
+      }).join("");
+      return "<tr><td class='name'>" + name + "</td>" + cells + "</tr>";
+    }).join("");
+
+    document.getElementById("table").innerHTML =
+      "<table><thead>" + head + "</thead><tbody>" + rows + "</tbody></table>";
+
+    document.getElementById("splitnote").textContent =
+      split === "scaffold"
+        ? s.n_train.toLocaleString() + " train / " + s.n_test.toLocaleString() +
+          " test, with chemical series kept whole. These are the numbers to trust."
+        : s.n_train.toLocaleString() + " train / " + s.n_test.toLocaleString() +
+          " test, split at random. Analogues of test compounds sit in training, " +
+          "so these numbers are optimistic.";
+
+    tradeoff();
+  }
+
+  function tradeoff() {
+    var m = data.splits.scaffold.models;
+    var rf = m["Random forest"], gb = m["Gradient boosting"];
+    if (!rf || !gb) { return; }
+    document.getElementById("tradeoff").innerHTML =
+      "On the scaffold split, gradient boosting ties random forest on AUROC (" +
+      f(gb.auroc) + " against " + f(rf.auroc) + ") but arrives there very " +
+      "differently: <strong>" + f(gb.sensitivity) + " sensitivity against " +
+      f(gb.specificity) + " specificity</strong>, where random forest is " +
+      f(rf.sensitivity) + " and " + f(rf.specificity) + ". One catches more " +
+      "blockers and cries wolf more often.";
+  }
+
+  Array.prototype.forEach.call(document.querySelectorAll(".split button"), function (b) {
+    b.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".split button"),
+        function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+      split = b.dataset.split;
+      render();
+    });
+  });
+})();
+</script>
+</body>
+</html>

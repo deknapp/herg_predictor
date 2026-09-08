@@ -152,7 +152,12 @@ venv.bak/
 .ropeproject
 
 # mkdocs documentation
-/site
+# /site came from the Python .gitignore template (it is a Scrapy convention).
+# This repository uses site/ for the published metrics page, so it must be
+# tracked. The template rule silently swallowed the whole directory and a
+# `git add -A` reported success while committing nothing.
+!/site
+!/site/**
 
 # mypy
 .mypy_cache/
@@ -206,3 +211,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 data/
+# ...but the published page's copy of the metrics is not bulk data, it is the
+# result the page displays, and it has to ship with the site.
+!site/data/
+!site/data/**
