@@ -11,7 +11,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 class RandomForestModel:
     """Random Forest classifier for molecular property prediction."""
-    
+
     def __init__(
         self,
         n_estimators: int = 500,
@@ -29,20 +29,20 @@ class RandomForestModel:
             random_state=random_state,
             n_jobs=n_jobs,
         )
-    
+
     def fit(self, X: np.ndarray, y: np.ndarray) -> "RandomForestModel":
         """Train the model."""
         self.model.fit(X, y)
         return self
-    
+
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict class labels."""
         return self.model.predict(X)
-    
+
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """Predict class probabilities."""
         return self.model.predict_proba(X)[:, 1]
-    
+
     def feature_importances(self) -> np.ndarray:
         """Return feature importances."""
         return self.model.feature_importances_
@@ -50,7 +50,7 @@ class RandomForestModel:
 
 class XGBoostModel:
     """XGBoost classifier for molecular property prediction."""
-    
+
     def __init__(
         self,
         n_estimators: int = 500,
@@ -79,7 +79,7 @@ class XGBoostModel:
             n_jobs=n_jobs,
             eval_metric="logloss",
         )
-    
+
     def fit(
         self,
         X: np.ndarray,
@@ -90,7 +90,7 @@ class XGBoostModel:
     ) -> "XGBoostModel":
         """
         Train the model with optional early stopping.
-        
+
         Args:
             X: Training features
             y: Training labels
@@ -103,25 +103,25 @@ class XGBoostModel:
             n_neg = np.sum(y == 0)
             n_pos = np.sum(y == 1)
             self.model.set_params(scale_pos_weight=n_neg / n_pos)
-        
+
         fit_params = {}
         if X_val is not None and y_val is not None:
             fit_params["eval_set"] = [(X_val, y_val)]
             if early_stopping_rounds:
                 fit_params["early_stopping_rounds"] = early_stopping_rounds
                 fit_params["verbose"] = False
-        
+
         self.model.fit(X, y, **fit_params)
         return self
-    
+
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict class labels."""
         return self.model.predict(X)
-    
+
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """Predict class probabilities."""
         return self.model.predict_proba(X)[:, 1]
-    
+
     def feature_importances(self) -> np.ndarray:
         """Return feature importances."""
         return self.model.feature_importances_

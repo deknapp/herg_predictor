@@ -64,8 +64,19 @@ target-version = ["py310"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    # X for a feature matrix and y for labels is the universal convention in
+    # scikit-learn and every paper this code implements. Renaming them to
+    # satisfy pep8-naming would make the code harder to read, not easier.
+    "N803",  # argument name should be lowercase
+    "N806",  # variable in function should be lowercase
+    # `import torch.nn.functional as F` is how every PyTorch file is written.
+    "N812",  # lowercase imported as non-lowercase
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

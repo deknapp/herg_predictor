@@ -2,10 +2,9 @@
 
 import numpy as np
 import torch
+from rdkit import Chem
 from torch.utils.data import Dataset
 from torch_geometric.data import Data
-from rdkit import Chem
-
 
 # Atom feature specifications
 ATOM_FEATURES = {
@@ -54,36 +53,36 @@ def one_hot_encode(value, allowable_set: list) -> list[int]:
 def get_atom_features(atom: Chem.Atom) -> np.ndarray:
     """Compute feature vector for an atom."""
     features = []
-    
+
     features.extend(one_hot_encode(atom.GetAtomicNum(), ATOM_FEATURES["atomic_num"]))
     features.extend(one_hot_encode(atom.GetDegree(), ATOM_FEATURES["degree"]))
     features.extend(one_hot_encode(atom.GetFormalCharge(), ATOM_FEATURES["formal_charge"]))
     features.extend(one_hot_encode(atom.GetHybridization(), ATOM_FEATURES["hybridization"]))
     features.extend(one_hot_encode(atom.GetIsAromatic(), ATOM_FEATURES["aromatic"]))
     features.extend(one_hot_encode(atom.GetTotalNumHs(), ATOM_FEATURES["num_hs"]))
-    
+
     return np.array(features, dtype=np.float32)
 
 
 def get_bond_features(bond: Chem.Bond) -> np.ndarray:
     """Compute feature vector for a bond."""
     features = []
-    
+
     features.extend(one_hot_encode(bond.GetBondType(), BOND_FEATURES["bond_type"]))
     features.extend(one_hot_encode(bond.GetIsConjugated(), BOND_FEATURES["is_conjugated"]))
     features.extend(one_hot_encode(bond.IsInRing(), BOND_FEATURES["is_in_ring"]))
     features.extend(one_hot_encode(bond.GetStereo(), BOND_FEATURES["stereo"]))
-    
+
     return np.array(features, dtype=np.float32)
 
 
 def mol_to_graph(smiles: str) -> dict | None:
     """
     Convert SMILES to graph representation.
-    
+
     Args:
         smiles: SMILES string
-        
+
     Returns:
         Dictionary with:
         - node_features: (num_atoms, atom_feature_dim) tensor
@@ -98,29 +97,29 @@ def mol_to_graph(smiles: str) -> dict | None:
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
             return None
-        
+
         # Get atom features
         atom_features = []
         for atom in mol.GetAtoms():
             atom_features.append(get_atom_features(atom))
         node_features = np.stack(atom_features, axis=0)
-        
+
         # Get bond features and edge indices
         # We add edges in both directions for undirected graph
         edge_indices = []
         edge_features = []
-        
+
         for bond in mol.GetBonds():
             i = bond.GetBeginAtomIdx()
             j = bond.GetEndAtomIdx()
             bond_feat = get_bond_features(bond)
-            
+
             # Add edge in both directions
             edge_indices.append([i, j])
             edge_indices.append([j, i])
             edge_features.append(bond_feat)
             edge_features.append(bond_feat)
-        
+
         if len(edge_indices) == 0:
             # Single atom molecule
             # A molecule with no bonds -- a lone ion, which the hERG set does
@@ -134,7 +133,7 @@ def mol_to_graph(smiles: str) -> dict | None:
         else:
             edge_index = np.array(edge_indices, dtype=np.int64).T
             edge_attr = np.stack(edge_features, axis=0)
-        
+
         return {
             "node_features": node_features,
             "edge_index": edge_index,
@@ -147,7 +146,7 @@ def mol_to_graph(smiles: str) -> dict | None:
 
 class MoleculeDataset(Dataset):
     """PyTorch Dataset for molecular graphs."""
-    
+
     def __init__(
         self,
         smiles_list: list[str],
@@ -160,24 +159,24 @@ class MoleculeDataset(Dataset):
         """
         self.smiles_list = smiles_list
         self.labels = labels
-        
+
         # Pre-compute graphs and filter invalid molecules
         self.graphs = []
         self.valid_indices = []
-        
+
         for idx, smiles in enumerate(smiles_list):
             graph = mol_to_graph(smiles)
             if graph is not None:
                 self.graphs.append(graph)
                 self.valid_indices.append(idx)
-        
+
         # Filter labels to match valid molecules
         if labels is not None:
             self.labels = labels[self.valid_indices]
-    
+
     def __len__(self) -> int:
         return len(self.graphs)
-    
+
     def __getitem__(self, idx: int) -> Data:
         """One molecule, as a PyTorch Geometric ``Data`` object.
 

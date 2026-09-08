@@ -1,0 +1,48 @@
+{
+  "seed": 42,
+  "threshold_nm": 10000.0,
+  "split": {
+    "n_train": 8847,
+    "n_val": 1106,
+    "n_test": 1106
+  },
+  "note": "Train and val kept separate; the baselines merge them.",
+  "models": {
+    "Feed-forward (ECFP4)": {
+      "auroc": 0.754178185473737,
+      "auprc": 0.8284618010563174,
+      "balanced_accuracy": 0.675909636703806,
+      "sensitivity": 0.7890173410404624,
+      "specificity": 0.5628019323671497,
+      "precision": 0.7510316368638239,
+      "f1": 0.7695560253699789,
+      "mcc": 0.3587451469594393,
+      "tp": 546,
+      "tn": 233,
+      "fp": 181,
+      "fn": 146,
+      "threshold": 0.5,
+      "n_samples": 1106,
+      "n_positive": 692,
+      "n_negative": 414
+    },
+    "GNN (MPNN)": {
+      "auroc": 0.7438409287649046,
+      "auprc": 0.8207699757632043,
+      "balanced_accuracy": 0.6910446510848622,
+      "sensitivity": 0.6791907514450867,
+      "specificity": 0.7028985507246377,
+      "precision": 0.7925801011804384,
+      "f1": 0.7315175097276264,
+      "mcc": 0.37079346120149687,
+      "tp": 470,
+      "tn": 291,
+      "fp": 123,
+      "fn": 222,
+      "threshold": 0.5,
+      "n_samples": 1106,
+      "n_positive": 692,
+      "n_negative": 414
+    }
+  }
+}
