@@ -99,6 +99,12 @@
   <div id="table"></div>
   <p class="note" id="splitnote"></p>
 
+  <h2 id="neuralhead" hidden>Does the extra machinery earn it?</h2>
+  <div id="neuralwrap" hidden>
+    <div id="neuraltable"></div>
+    <p class="note" id="neuralnote"></p>
+  </div>
+
   <h2>Reading past the headline number</h2>
   <div class="finding" style="border-left-color:var(--accent)">
     <p style="margin-top:0" id="tradeoff">—</p>
@@ -117,7 +123,7 @@
     test set.</p>
     <p>Source and full metrics:
        <a href="https://github.com/deknapp/herg_predictor">github.com/deknapp/herg_predictor</a>
-       · <code>results/baseline_metrics.json</code></p>
+       · <code>results/baseline_metrics.json</code>, <code>results/neural_metrics.json</code></p>
   </footer>
 </div>
 
@@ -136,6 +142,7 @@
     headline();
     dataset();
     render();
+    neural();
   }).catch(function () {
     document.getElementById("table").innerHTML =
       '<p class="note">Could not load metrics.json.</p>';
@@ -199,6 +206,81 @@
           "so these numbers are optimistic.";
 
     tradeoff();
+  }
+
+  // The neural models live in their own file because a separate script writes
+  // them. If that script has never been run there is nothing to show, and the
+  // section stays hidden rather than rendering an empty table.
+  var CONTROL = "Random forest (same rows)";
+
+  function neural() {
+    fetch("data/neural.json").then(function (r) {
+      if (!r.ok) { throw new Error("no neural metrics"); }
+      return r.json();
+    }).then(function (n) {
+      var base = data.splits.scaffold.models;
+      var control = n.models[CONTROL];
+      var neuralNames = Object.keys(n.models).filter(function (k) { return k !== CONTROL; });
+
+      var order = Object.keys(base).concat(control ? [CONTROL] : []).concat(neuralNames);
+      var rows = {};
+      Object.keys(base).forEach(function (k) { rows[k] = base[k]; });
+      Object.keys(n.models).forEach(function (k) { rows[k] = n.models[k]; });
+
+      var bestAll = Math.max.apply(null, order.map(function (k) { return rows[k].auroc; }));
+
+      var head = "<tr><th>Model</th><th>Train</th>" +
+        METRICS.map(function (m) { return "<th>" + LABELS[m] + "</th>"; }).join("") + "</tr>";
+
+      var body = order.map(function (name) {
+        var m = rows[name];
+        var isNeural = neuralNames.indexOf(name) !== -1;
+        var small = isNeural || name === CONTROL;
+        var nTrain = small ? n.split.n_train : data.splits.scaffold.n_train;
+        var cells = METRICS.map(function (key) {
+          var cls = (key === "auroc" && m[key] === bestAll) ? ' class="best"' : "";
+          return "<td" + cls + ">" + f(m[key]) + "</td>";
+        }).join("");
+        var label = isNeural ? "<strong>" + name + "</strong>" : name;
+        return "<tr><td class='name'>" + label + "</td><td>" +
+               nTrain.toLocaleString() + "</td>" + cells + "</tr>";
+      }).join("");
+
+      document.getElementById("neuraltable").innerHTML =
+        "<table><thead>" + head + "</thead><tbody>" + body + "</tbody></table>";
+
+      var best = null, bestName = null, worst = null, worstName = null;
+      neuralNames.forEach(function (k) {
+        if (!best || n.models[k].auroc > best.auroc) { best = n.models[k]; bestName = k; }
+        if (!worst || n.models[k].auroc < worst.auroc) { worst = n.models[k]; worstName = k; }
+      });
+      var rf = base["Random forest"];
+
+      var note =
+        "Same scaffold split, same seed, same held-out " + n.split.n_test.toLocaleString() +
+        " compounds. The neural models train on " + n.split.n_train.toLocaleString() +
+        " rows rather than " + data.splits.scaffold.n_train.toLocaleString() +
+        ", because they need a validation set to stop on and the baselines do not. ";
+
+      if (control) {
+        note += "The <em>same random forest refit on those same " +
+          n.split.n_train.toLocaleString() + " rows</em> is the control, and it prices that " +
+          "handicap at <strong>" + f(control.auroc - rf.auroc) + " AUROC</strong> — " +
+          f(control.auroc) + " against " + f(rf.auroc) + ". ";
+      }
+
+      note += "On equal data the best of the two networks, " + bestName + ", still reads " +
+        f(best.auroc) + "; " + worstName + ", the one that learns its own representation " +
+        "instead of being handed a fingerprint, reads " + f(worst.auroc) + ". " +
+        "A graph neural network does not beat a random forest on 2,048 fingerprint bits " +
+        "here, and on eleven thousand compounds that is the expected result rather than a " +
+        "surprising one: the graph model has more to learn and no more data to learn it " +
+        "from. It is reported because the opposite is what tends to get published.";
+
+      document.getElementById("neuralnote").innerHTML = note;
+      document.getElementById("neuralhead").hidden = false;
+      document.getElementById("neuralwrap").hidden = false;
+    }).catch(function () { /* section stays hidden */ });
   }
 
   function tradeoff() {

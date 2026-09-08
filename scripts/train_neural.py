@@ -17,6 +17,11 @@ compounds the baselines train on. That favours the baselines slightly, and it
 is the honest arrangement: giving a neural network its validation set back as
 training data means selecting the stopping epoch on the test set.
 
+So this script also refits the random forest on the neural models' smaller
+training set and reports it as a control. Without it, "the random forest wins"
+and "the random forest was given eleven percent more data" are the same
+sentence, and nobody can tell which one the gap is.
+
     python scripts/train_neural.py
 """
 
@@ -31,6 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
 import torch  # noqa: E402
+from sklearn.ensemble import RandomForestClassifier  # noqa: E402
 from torch_geometric.loader import DataLoader  # noqa: E402
 
 from herg_predictor.data.preprocess import preprocess_herg_data  # noqa: E402
@@ -53,6 +59,19 @@ THRESHOLD_NM = 10000.0  # matches train_baselines.py; the two must agree
 EPOCHS = 100
 PATIENCE = 15
 BATCH_SIZE = 64
+
+
+def random_forest_control(X, y, tr, te) -> dict:
+    """The baseline random forest, refit on the neural models' training rows.
+
+    Same hyperparameters as ``train_baselines.py`` -- if that file changes,
+    this must change with it, or the control stops controlling for anything.
+    """
+    model = RandomForestClassifier(
+        n_estimators=500, min_samples_leaf=2, class_weight="balanced",
+        n_jobs=-1, random_state=SEED)
+    model.fit(X[tr], y[tr])
+    return compute_classification_metrics(y[te], model.predict_proba(X[te])[:, 1])
 
 
 def train_feedforward(X, y, tr, va, te) -> dict:
@@ -132,6 +151,10 @@ def main() -> None:
         "models": {},
     }
 
+    log.info("\nRandom forest on the same %d training rows (control) ...", len(tr))
+    results["models"]["Random forest (same rows)"] = random_forest_control(X, y, tr, te)
+    log.info("    AUROC %.3f", results["models"]["Random forest (same rows)"]["auroc"])
+
     log.info("\nFeed-forward network on ECFP4 ...")
     results["models"]["Feed-forward (ECFP4)"] = train_feedforward(X, y, tr, va, te)
     log.info("    AUROC %.3f", results["models"]["Feed-forward (ECFP4)"]["auroc"])
@@ -140,10 +163,18 @@ def main() -> None:
     results["models"]["GNN (MPNN)"] = train_gnn(smiles, y, tr, va, te)
     log.info("    AUROC %.3f", results["models"]["GNN (MPNN)"]["auroc"])
 
+    payload = json.dumps(results, indent=2)
     out = ROOT / "results" / "neural_metrics.json"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps(results, indent=2))
+    out.write_text(payload)
     log.info("\nWrote %s", out.relative_to(ROOT))
+
+    # Same rule as train_baselines.py: the published page reads its own copy,
+    # written from the same string in the same run so the two cannot drift.
+    page = ROOT / "site" / "data" / "neural.json"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(payload)
+    log.info("Wrote %s", page.relative_to(ROOT))
 
     log.info("\n| Model | AUROC | AUPRC | Balanced acc. | Sensitivity | Specificity |")
     log.info("|---|---|---|---|---|---|")

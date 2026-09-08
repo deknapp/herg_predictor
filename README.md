@@ -114,6 +114,38 @@ random forest but gets there with 0.870 sensitivity against 0.490 specificity
 free. Balanced accuracy (0.680 vs random forest's 0.725) is the honest
 comparison.
 
+**Neural models, same split.** A dense network on the same ECFP4 bits and a
+message-passing GNN on the molecular graphs, from `scripts/train_neural.py`.
+Both need a validation set to stop on, so they train on 8,847 rows where the
+baselines train on 9,953 — the random forest is refit on those same 8,847 as a
+control, because otherwise "the forest wins" and "the forest saw more data"
+are the same sentence.
+
+| Model | Train | AUROC | AUPRC | Balanced acc. | Sensitivity | Specificity |
+|---|---|---|---|---|---|---|
+| Random forest | 9,953 | 0.794 | 0.861 | 0.725 | 0.796 | 0.655 |
+| Random forest (same rows) | 8,847 | 0.782 | 0.856 | 0.692 | 0.785 | 0.599 |
+| Feed-forward (ECFP4) | 8,847 | 0.754 | 0.828 | 0.676 | 0.789 | 0.563 |
+| GNN (MPNN) | 8,847 | 0.744 | 0.821 | 0.691 | 0.679 | 0.703 |
+
+The control prices the smaller training set at 0.012 AUROC. The remaining gap
+is not data: on identical rows the feed-forward network is 0.028 behind the
+forest and the GNN 0.038 behind it. **Learning a representation from the graph
+does not beat being handed a fingerprint at this scale**, which is the expected
+result on eleven thousand compounds — the graph model has strictly more to
+learn and no more data to learn it from — and the opposite of what a paper
+proposing a new architecture reports.
+
+The GNN is not uniformly worse, which is the reason to keep it in the table.
+It is the only model here above 0.70 specificity — 0.703, where every other
+model sits between 0.49 and 0.66 — and on balanced accuracy it matches the
+random forest trained on its own rows (0.691 against 0.692) while reading
+0.038 lower on AUROC. It is not a weaker version of the fingerprint models; it
+disagrees with them about which compounds are blockers, and it is the one model
+that does not simply exploit a 65% positive rate by guessing blocker. A model
+that fails differently is worth more in an ensemble than one that fails the
+same way slightly better.
+
 > These scaffold-split numbers changed slightly on 2026-09-07, from 0.749 /
 > 0.801 / 0.800, when a bug in the splitter was fixed. It filled train to its
 > quota before checking, so a chemical series larger than the space left
