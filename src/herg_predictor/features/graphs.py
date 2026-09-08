@@ -3,6 +3,7 @@
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from torch_geometric.data import Data
 from rdkit import Chem
 
 
@@ -87,7 +88,10 @@ def mol_to_graph(smiles: str) -> dict | None:
         Dictionary with:
         - node_features: (num_atoms, atom_feature_dim) tensor
         - edge_index: (2, num_edges) tensor of edge indices
-        - edge_features: (num_edges, bond_feature_dim) tensor
+        - edge_features: (num_edges, bond_feature_dim) tensor, which for a
+          molecule with no bonds is an empty array of the right width rather
+          than None -- PyG batches by concatenating, so an absent edge_attr on
+          one graph makes the whole batch containing it fail to collate
         Returns None if molecule is invalid
     """
     try:
@@ -119,8 +123,14 @@ def mol_to_graph(smiles: str) -> dict | None:
         
         if len(edge_indices) == 0:
             # Single atom molecule
+            # A molecule with no bonds -- a lone ion, which the hERG set does
+            # contain. The width of the empty edge-feature array still has to
+            # match every other molecule's or batching fails, and the previous
+            # expression here reached for "the first bond" of a molecule that
+            # by construction has none, threw AttributeError, and was swallowed
+            # by the blanket `except` below into a silent `return None`.
             edge_index = np.zeros((2, 0), dtype=np.int64)
-            edge_attr = np.zeros((0, len(get_bond_features(mol.GetBonds().__iter__().__next__() if mol.GetNumBonds() > 0 else None))), dtype=np.float32)
+            edge_attr = np.zeros((0, get_bond_feature_dim()), dtype=np.float32)
         else:
             edge_index = np.array(edge_indices, dtype=np.int64).T
             edge_attr = np.stack(edge_features, axis=0)
@@ -128,7 +138,7 @@ def mol_to_graph(smiles: str) -> dict | None:
         return {
             "node_features": node_features,
             "edge_index": edge_index,
-            "edge_features": edge_attr if len(edge_attr) > 0 else None,
+            "edge_features": edge_attr,
             "num_nodes": len(atom_features),
         }
     except Exception:
@@ -168,22 +178,29 @@ class MoleculeDataset(Dataset):
     def __len__(self) -> int:
         return len(self.graphs)
     
-    def __getitem__(self, idx: int) -> dict:
+    def __getitem__(self, idx: int) -> Data:
+        """One molecule, as a PyTorch Geometric ``Data`` object.
+
+        This used to return a plain dict, and that was the reason the GNN had
+        never been trained. :class:`~herg_predictor.models.gnn.GNNClassifier`
+        reads ``batch.x``, ``batch.edge_index``, ``batch.edge_attr`` and
+        ``batch.batch`` -- the attributes PyG's collater builds when it
+        concatenates graphs of different sizes into one disconnected graph. A
+        dict collated by the default PyTorch loader has none of them, and
+        would not have stacked anyway, because molecules have different atom
+        counts. The dataset and the trainer were each reasonable and could not
+        be connected to one another.
+        """
         graph = self.graphs[idx]
-        
-        item = {
-            "node_features": torch.from_numpy(graph["node_features"]),
-            "edge_index": torch.from_numpy(graph["edge_index"]),
-            "num_nodes": graph["num_nodes"],
-        }
-        
-        if graph["edge_features"] is not None:
-            item["edge_features"] = torch.from_numpy(graph["edge_features"])
-        
+
+        data = Data(
+            x=torch.from_numpy(graph["node_features"]).float(),
+            edge_index=torch.from_numpy(graph["edge_index"]).long(),
+        )
+        data.edge_attr = torch.from_numpy(graph["edge_features"]).float()
         if self.labels is not None:
-            item["label"] = torch.tensor(self.labels[idx], dtype=torch.float32)
-        
-        return item
+            data.y = torch.tensor([self.labels[idx]], dtype=torch.float32)
+        return data
 
 
 def get_atom_feature_dim() -> int:

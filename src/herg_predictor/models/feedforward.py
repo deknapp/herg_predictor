@@ -1,5 +1,11 @@
 """Feed-forward neural network for molecular property prediction."""
 
+# numpy is used in fourteen places in this file and was never imported, so the
+# module raised NameError on the first annotation that mentioned it and could
+# not be imported at all. Nothing caught it because nothing imported it: the
+# test suite touched the network's forward pass only, and that test was
+# failing. See tests/test_herg_predictor.py::test_feedforward_trains.
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

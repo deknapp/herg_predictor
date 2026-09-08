@@ -49,52 +49,84 @@ def scaffold_split(
         Tuple of (train_indices, val_indices, test_indices)
     """
     assert abs(train_ratio + val_ratio + test_ratio - 1.0) < 1e-6
-    
+
     rng = np.random.default_rng(seed)
-    
-    # Get scaffolds for each molecule
+
     scaffolds = [get_scaffold(smi) for smi in smiles_list]
-    
-    # Group molecules by scaffold
+
     scaffold_to_indices: dict[str, list[int]] = {}
     for idx, scaffold in enumerate(scaffolds):
         if scaffold is None:
             scaffold = f"NONE_{idx}"  # Treat invalid scaffolds as unique
-        if scaffold not in scaffold_to_indices:
-            scaffold_to_indices[scaffold] = []
-        scaffold_to_indices[scaffold].append(idx)
-    
-    # Sort scaffolds by size (largest first) for more balanced splits
+        scaffold_to_indices.setdefault(scaffold, []).append(idx)
+
     scaffold_sets = list(scaffold_to_indices.values())
-    scaffold_sets.sort(key=len, reverse=True)
-    
-    # Shuffle scaffold order (after sorting by size)
+
+    # Shuffle first, then stable-sort by size, so the seed decides the order
+    # of equally-sized series and nothing else does. Sorting after shuffling
+    # -- which is what this did -- threw the shuffle away; shuffling after
+    # sorting threw the sort away, which is the bug below.
     rng.shuffle(scaffold_sets)
-    
-    # Assign scaffolds to splits
+    scaffold_sets.sort(key=len, reverse=True)
+
+    # Assign each series to whichever split is furthest below its target,
+    # largest series first.
+    #
+    # The previous version filled train until it reached its quota, then val,
+    # then gave the remainder to test. That silently produces empty splits,
+    # because the check happens *before* the series is added: a series larger
+    # than the space left does not overflow into the next split, it lands
+    # whole and overshoots. One series bigger than the val quota therefore
+    # consumes val entirely and leaves test with nothing.
+    #
+    # Not hypothetical, and not subtle once measured. On 100 compounds where
+    # 85 share a scaffold, it returned train=100, val=0, test=0 -- and
+    # returned it without complaint, so every metric downstream would have
+    # been computed on an empty test set and reported as a number. The hERG
+    # data happens to have no series large enough to trigger it, which is
+    # exactly what makes it worth fixing now rather than after a dataset
+    # change makes it fire.
     n_total = len(smiles_list)
-    n_train = int(n_total * train_ratio)
-    n_val = int(n_total * val_ratio)
-    
-    train_indices = []
-    val_indices = []
-    test_indices = []
-    
+    targets = [n_total * train_ratio, n_total * val_ratio, n_total * test_ratio]
+    splits: list[list[int]] = [[], [], []]
+
     for scaffold_indices in scaffold_sets:
-        if len(train_indices) < n_train:
-            train_indices.extend(scaffold_indices)
-        elif len(val_indices) < n_val:
-            val_indices.extend(scaffold_indices)
-        else:
-            test_indices.extend(scaffold_indices)
-    
-    logger.info(f"Scaffold split: train={len(train_indices)}, val={len(val_indices)}, test={len(test_indices)}")
+        # Deficit rather than free space: a split at 60% of a large target is
+        # hungrier than one at 60% of a small one, which is what keeps the
+        # proportions right instead of merely keeping every split non-empty.
+        deficits = [t - len(s) for t, s in zip(targets, splits)]
+        splits[deficits.index(max(deficits))].extend(scaffold_indices)
+
+    train_indices, val_indices, test_indices = splits
+
+    logger.info(
+        f"Scaffold split: train={len(train_indices)}, "
+        f"val={len(val_indices)}, test={len(test_indices)}"
+    )
     logger.info(f"Number of unique scaffolds: {len(scaffold_to_indices)}")
-    
+
+    # A split with nothing in it is not a split, and every metric computed
+    # from it downstream is meaningless rather than merely wrong. Say so here,
+    # where the cause is visible, rather than letting an AUROC over zero
+    # compounds reach a README.
+    empty = [name for name, part in
+             zip(("train", "val", "test"), splits) if not part]
+    if empty:
+        raise ValueError(
+            f"Scaffold split left {', '.join(empty)} empty: {n_total} compounds "
+            f"in {len(scaffold_sets)} scaffold series, the largest holding "
+            f"{len(scaffold_sets[0])}. A single series larger than a split's "
+            "share cannot be divided, so the requested ratios are not "
+            "achievable on this data. Use strategy='random', or widen the "
+            "ratios."
+        )
+
+    # int, explicitly: an empty np.array([]) is float64, and indexing a
+    # DataFrame with float positions raises somewhere far from here.
     return (
-        np.array(train_indices),
-        np.array(val_indices),
-        np.array(test_indices),
+        np.array(train_indices, dtype=int),
+        np.array(val_indices, dtype=int),
+        np.array(test_indices, dtype=int),
     )
 
 

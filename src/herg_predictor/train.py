@@ -81,8 +81,10 @@ def prepare_gnn_data(
                     edge_index=torch.from_numpy(graph["edge_index"]),
                     y=torch.tensor(row["label"], dtype=torch.float),
                 )
-                if graph["edge_features"] is not None:
-                    data.edge_attr = torch.from_numpy(graph["edge_features"])
+                # Unconditional: mol_to_graph returns an empty array of the
+                # right width for a bond-less molecule, and a batch where one
+                # graph lacks edge_attr entirely will not collate.
+                data.edge_attr = torch.from_numpy(graph["edge_features"]).float()
                 data_list.append(data)
         return data_list
     

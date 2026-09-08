@@ -1,5 +1,11 @@
 """Graph Neural Network models for molecular property prediction."""
 
+# Same missing import as feedforward.py, and the same consequence: NameError
+# on the first annotation mentioning numpy, so the module could not be
+# imported. Neither neural model in this repo had ever been run.
+from typing import Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,33 +23,41 @@ class MPNNLayer(MessagePassing):
     
     def __init__(
         self,
-        node_dim: int,
+        node_feature_dim: int,
         edge_dim: int | None = None,
         hidden_dim: int = 128,
         aggr: str = "mean",
     ):
         super().__init__(aggr=aggr)
-        
-        self.node_dim = node_dim
+
+        # Named node_feature_dim, not node_dim, and the distinction is not
+        # cosmetic. MessagePassing already owns an attribute called node_dim:
+        # the *axis* along which to propagate, which is -2. Assigning the
+        # feature width to it -- 149 for the first layer -- made PyG try to
+        # read size 149 of a two-dimensional tensor, so constructing and
+        # running the layer raised "Dimension out of range (expected to be in
+        # range of [-2, 1], but got 64)". The name collision is silent at
+        # definition time and fatal at the first forward pass.
+        self.node_feature_dim = node_feature_dim
         self.hidden_dim = hidden_dim
         
         # Message function: combines source node and edge features
         if edge_dim is not None:
             self.message_mlp = nn.Sequential(
-                nn.Linear(node_dim + edge_dim, hidden_dim),
+                nn.Linear(node_feature_dim + edge_dim, hidden_dim),
                 nn.ReLU(),
                 nn.Linear(hidden_dim, hidden_dim),
             )
         else:
             self.message_mlp = nn.Sequential(
-                nn.Linear(node_dim, hidden_dim),
+                nn.Linear(node_feature_dim, hidden_dim),
                 nn.ReLU(),
                 nn.Linear(hidden_dim, hidden_dim),
             )
         
         # Update function: combines node with aggregated messages
         self.update_mlp = nn.Sequential(
-            nn.Linear(node_dim + hidden_dim, hidden_dim),
+            nn.Linear(node_feature_dim + hidden_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
         )
@@ -60,7 +74,7 @@ class MPNNLayer(MessagePassing):
         Forward pass.
         
         Args:
-            x: Node features (num_nodes, node_dim)
+            x: Node features (num_nodes, node_feature_dim)
             edge_index: Edge indices (2, num_edges)
             edge_attr: Edge features (num_edges, edge_dim), optional
             
@@ -78,9 +92,20 @@ class MPNNLayer(MessagePassing):
     def message(
         self,
         x_j: torch.Tensor,
-        edge_attr: torch.Tensor | None = None,
+        edge_attr: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
-        """Compute messages from source nodes."""
+        """Compute messages from source nodes.
+
+        ``Optional[Tensor]``, not ``Tensor | None``, and only here. PyG's
+        MessagePassing reads this signature at construction time to work out
+        what to pass into message passing, and its parser calls
+        ``__qualname__`` on each annotation -- which PEP 604 unions do not
+        have. Written the modern way, constructing the layer raised
+        ``AttributeError: 'types.UnionType' object has no attribute
+        '__qualname__'`` from inside PyG, and the model could not be
+        instantiated at all. Everywhere PyG does not introspect, the ``|``
+        form is fine and is left alone.
+        """
         if edge_attr is not None and self.edge_dim is not None:
             return self.message_mlp(torch.cat([x_j, edge_attr], dim=-1))
         else:
@@ -140,7 +165,7 @@ class MPNN(nn.Module):
         for _ in range(num_layers):
             self.conv_layers.append(
                 MPNNLayer(
-                    node_dim=hidden_dim,
+                    node_feature_dim=hidden_dim,
                     edge_dim=edge_dim,
                     hidden_dim=hidden_dim,
                     aggr=aggregation,

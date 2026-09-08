@@ -52,8 +52,8 @@ notebooks = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nathanknapp/herg-predictor"
-Repository = "https://github.com/nathanknapp/herg-predictor"
+Homepage = "https://github.com/deknapp/herg_predictor"
+Repository = "https://github.com/deknapp/herg_predictor"
 
 [tool.setuptools.packages.find]
 where = ["src"]
