@@ -84,15 +84,15 @@ positive. That imbalance is a property of what gets measured for hERG, not of
 the sampling: compounds reach a hERG assay because someone already suspected
 them.
 
-**Headline: scaffold split** (9,956 train / 1,103 test, 5,757 unique
+**Headline: scaffold split** (9,953 train / 1,106 test, 5,757 unique
 scaffolds). Chemical series are kept whole, so a test compound never has a
 close analogue in training. This is the number that matters.
 
 | Model | AUROC | AUPRC | Balanced acc. | Sensitivity | Specificity |
 |---|---|---|---|---|---|
-| Logistic regression | 0.749 | 0.855 | 0.666 | 0.704 | 0.628 |
-| Random forest | 0.801 | 0.880 | 0.724 | 0.784 | 0.665 |
-| Gradient boosting | 0.800 | 0.883 | 0.692 | 0.865 | 0.519 |
+| Logistic regression | 0.754 | 0.829 | 0.690 | 0.740 | 0.640 |
+| Random forest | 0.794 | 0.861 | 0.725 | 0.796 | 0.655 |
+| Gradient boosting | 0.787 | 0.857 | 0.680 | 0.870 | 0.490 |
 
 **Random split** (9,953 train / 1,106 test), reported only to show how much the
 easier split flatters:
@@ -104,14 +104,23 @@ easier split flatters:
 | Gradient boosting | 0.858 | 0.916 | 0.758 | 0.871 | 0.645 |
 
 The gap is the point. Random forest reads 0.860 AUROC on a random split and
-0.801 on a scaffold split — **0.059 of the apparent performance is analogues
+0.794 on a scaffold split — **0.066 of the apparent performance is analogues
 leaking across the split**, not chemistry the model learned. A published hERG
 model quoting a random-split number is quoting the larger of the two.
 
-Gradient boosting is worth reading past its AUROC: it ties random forest at
-0.800 but gets there with 0.865 sensitivity against 0.519 specificity — it
-calls almost everything a blocker. On a 65% positive set that is close to free.
-Balanced accuracy (0.692 vs random forest's 0.724) is the honest comparison.
+Gradient boosting is worth reading past its AUROC: it is within 0.007 of
+random forest but gets there with 0.870 sensitivity against 0.490 specificity
+— it calls almost everything a blocker. On a 65% positive set that is close to
+free. Balanced accuracy (0.680 vs random forest's 0.725) is the honest
+comparison.
+
+> These scaffold-split numbers changed slightly on 2026-09-07, from 0.749 /
+> 0.801 / 0.800, when a bug in the splitter was fixed. It filled train to its
+> quota before checking, so a chemical series larger than the space left
+> overshot rather than overflowing into the next split — which on this data
+> shifted about thirty compounds and on other data could empty a split
+> entirely. The method did not change and neither did the random-split
+> numbers, which never used that code path.
 
 ### What this is not
 

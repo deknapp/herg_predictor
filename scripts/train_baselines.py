@@ -112,10 +112,20 @@ def main() -> None:
         "models": evaluate(X, y, tr_r, te_r),
     }
 
+    payload = json.dumps(results, indent=2)
     out = ROOT / "results" / "baseline_metrics.json"
     out.parent.mkdir(exist_ok=True)
-    out.write_text(json.dumps(results, indent=2))
+    out.write_text(payload)
     log.info("\nWrote %s", out.relative_to(ROOT))
+
+    # The published page reads its own copy, and until now nothing kept the
+    # two in step: re-running this script updated the repo's numbers and left
+    # the live page showing the old ones, with no error anywhere. Written from
+    # the same string in the same run so they cannot disagree.
+    page = ROOT / "site" / "data" / "metrics.json"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(payload)
+    log.info("Wrote %s", page.relative_to(ROOT))
 
     # The markdown table that goes in the README.
     log.info("\n| Model | AUROC | AUPRC | Balanced acc. | Sensitivity | Specificity |")
